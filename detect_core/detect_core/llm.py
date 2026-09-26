@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional
 
 from pydantic import BaseModel, ValidationError
 
+from . import tracing
 from .contracts import DocView, OcrResult, VerifyItem, VerifyVerdict
 
 log = logging.getLogger("detect_core.llm")
@@ -252,9 +253,36 @@ class GeminiClient:
     def _generate(self, endpoint: str, contents: list[Any], system: Optional[str],
                   schema: type[BaseModel], items: int, device_id: Optional[str],
                   cache_key: Optional[str] = None,
-                  decisions: Optional[Callable[[BaseModel], dict]] = None) -> BaseModel:
+                  decisions: Optional[Callable[[BaseModel], dict]] = None,
+                  trace_inputs: Optional[dict[str, Any]] = None,
+                  trace_outputs: Optional[Callable[[BaseModel], dict]] = None) -> BaseModel:
+        """One LangSmith run per call. `trace_inputs`/`trace_outputs` decide what is traced:
+        callers pass masked text only (OCR passes metadata only). Keys are never traced."""
+        meta = {"ls_provider": "google_genai", "ls_model_name": self.model, "endpoint": endpoint,
+                "device_id": device_id, "items": items}
+        with tracing.span(f"gemini.{endpoint}", run_type="llm", inputs=trace_inputs or {},
+                          metadata=meta, tags=["kavach", endpoint]) as sp:
+            info: dict[str, Any] = {}
+            try:
+                parsed = self._generate_impl(endpoint, contents, system, schema, items, device_id,
+                                             cache_key, decisions, info)
+            except LLMUnavailable:
+                sp.add_metadata(**{k: v for k, v in info.items() if k != "usage"})
+                raise
+            sp.add_metadata(**{k: v for k, v in info.items() if k != "usage"})
+            out = trace_outputs(parsed) if trace_outputs else parsed.model_dump()
+            if info.get("usage"):
+                out["usage_metadata"] = info["usage"]
+            sp.end(out)
+            return parsed
+
+    def _generate_impl(self, endpoint: str, contents: list[Any], system: Optional[str],
+                       schema: type[BaseModel], items: int, device_id: Optional[str],
+                       cache_key: Optional[str], decisions: Optional[Callable[[BaseModel], dict]],
+                       info: dict[str, Any]) -> BaseModel:
         if not self.use_cache:
             cache_key = None
+        info["cache"] = "off" if cache_key is None else "miss"
         if cache_key:
             hit = self._cache_get(cache_key)
             if hit is not None:
@@ -263,6 +291,7 @@ class GeminiClient:
                     self._emit(endpoint=endpoint, model=self.model, key_index=None, latency_ms=0,
                                tokens_in=0, tokens_out=0, items=items, status="cached", attempts=0,
                                decisions=decisions(parsed) if decisions else {}, device_id=device_id)
+                    info["cache"] = "hit"
                     return parsed
                 except ValidationError:
                     pass
@@ -276,6 +305,8 @@ class GeminiClient:
         backoffs = list(BACKOFFS)
         attempts = 0
         last_idx: Optional[int] = None
+        errors: list[dict[str, Any]] = []
+        info["attempt_errors"] = errors
         t0 = time.monotonic()
         while attempts < MAX_ATTEMPTS:
             got = self.pool.acquire()
@@ -289,23 +320,28 @@ class GeminiClient:
             idx, key = got
             last_idx = idx
             attempts += 1
+            info.update(key_index=idx, attempts=attempts)
             try:
                 resp = self._client(idx, key).models.generate_content(
                     model=self.model, contents=contents, config=config)
                 parsed = resp.parsed if isinstance(resp.parsed, schema) else schema.model_validate_json(resp.text)
                 usage = getattr(resp, "usage_metadata", None)
+                tin = getattr(usage, "prompt_token_count", None) or 0
+                tout = getattr(usage, "candidates_token_count", None) or 0
+                latency = int((time.monotonic() - t0) * 1000)
+                info.update(latency_ms=latency, key_rotations=attempts - 1,
+                            usage={"input_tokens": tin, "output_tokens": tout, "total_tokens": tin + tout})
                 self._emit(endpoint=endpoint, model=self.model, key_index=idx,
-                           latency_ms=int((time.monotonic() - t0) * 1000),
-                           tokens_in=getattr(usage, "prompt_token_count", None) or 0,
-                           tokens_out=getattr(usage, "candidates_token_count", None) or 0,
+                           latency_ms=latency, tokens_in=tin, tokens_out=tout,
                            items=items, status="ok", attempts=attempts,
                            decisions=decisions(parsed) if decisions else {}, device_id=device_id)
                 if cache_key:
                     self._cache_put(cache_key, parsed.model_dump())
                 return parsed
             except Exception as exc:  # noqa: BLE001 — classify and rotate
-                # Log only the exception type and code: messages can echo request data.
+                # Log/trace only the exception type and code: messages can echo request data.
                 code = getattr(exc, "code", None)
+                errors.append({"key_index": idx, "error": type(exc).__name__, "code": code})
                 log.warning("llm %s failed on key_index=%s: %s code=%s", endpoint, idx,
                             type(exc).__name__, code)
                 if self._is_rate_limit(exc):
@@ -314,6 +350,7 @@ class GeminiClient:
                 if isinstance(exc, (ValidationError, ValueError)) or self._is_retryable(exc):
                     continue
                 break
+        info["latency_ms"] = int((time.monotonic() - t0) * 1000)
         self._emit(endpoint=endpoint, model=self.model, key_index=last_idx,
                    latency_ms=int((time.monotonic() - t0) * 1000), tokens_in=0, tokens_out=0,
                    items=items, status="error", attempts=max(attempts, 1), decisions={},
@@ -344,7 +381,8 @@ class GeminiClient:
                                  cache_key=self._key("verify", system, prompt),
                                  decisions=lambda r: {
                                      "sensitive": sum(v.is_sensitive for v in r.verdicts),
-                                     "not_sensitive": sum(not v.is_sensitive for v in r.verdicts)})
+                                     "not_sensitive": sum(not v.is_sensitive for v in r.verdicts)},
+                                 trace_inputs={"system": system, "items": [it.model_dump() for it in items]})
         except LLMUnavailable:
             return [unavailable_verdict(it, self._category_for(_token_type(it.candidate_token))) for it in items]
         by_id = {v.candidate_id: v for v in res.verdicts}  # type: ignore[attr-defined]
@@ -369,7 +407,9 @@ class GeminiClient:
         try:
             r = self._generate("classify", [prompt], system, _DocOut, 1, device_id,
                                cache_key=self._key("classify", system, prompt),
-                               decisions=lambda r: {"doc_type": r.doc_type})
+                               decisions=lambda r: {"doc_type": r.doc_type},
+                               trace_inputs={"system": system, "filename": filename,
+                                             "masked_head": masked_head[:1500]})
         except LLMUnavailable:
             return DocView(doc_type="unknown", markings=[], suggested_tier=None, confidence=0.0,
                            reason="llm_unavailable")
@@ -382,8 +422,13 @@ class GeminiClient:
         """Plain-text transcription. Never cached. Raises LLMUnavailable on final failure."""
         from google.genai import types  # lazy
         part = types.Part.from_bytes(data=image_bytes, mime_type=mime)
+        # Image and transcription hold raw identifiers: trace metadata only.
         r = self._generate("ocr", [part, _OCR_PROMPT], None, _OcrOut, 1, device_id,
-                           decisions=lambda r: {"chars": len(r.text)})
+                           decisions=lambda r: {"chars": len(r.text)},
+                           trace_inputs={"mime": mime, "image_bytes": len(image_bytes),
+                                         "prompt": _OCR_PROMPT, "image": "[not traced]"},
+                           trace_outputs=lambda r: {"chars": len(r.text), "lines": r.text.count("\n") + 1,
+                                                    "confidence": r.confidence, "text": "[not traced]"})
         return OcrResult(text=r.text, confidence=_clamp01(r.confidence), pages=1)  # type: ignore[attr-defined]
 
 
@@ -434,6 +479,8 @@ def _selftest() -> None:
             print(f"{v.candidate_id}: sensitive={v.is_sensitive} type={v.type} holder={v.individual_or_business} "
                   f"conf={v.confidence:.2f} reason={v.reason}")
     print("key_index per call:", [r.get("key_index") for r in rows], "status:", [r.get("status") for r in rows])
+    print("langsmith tracing:", "on" if tracing.enabled() else "off")
+    tracing.flush()
 
 
 if __name__ == "__main__":

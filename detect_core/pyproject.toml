@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = ["pydantic>=2.7", "pyyaml>=6.0"]
 
 [project.optional-dependencies]
-llm = ["google-genai>=1.0"]
+llm = ["google-genai>=1.0", "langsmith>=0.3"]
 
 [tool.setuptools]
 packages = ["detect_core"]

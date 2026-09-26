@@ -10,6 +10,7 @@ import logging
 import os
 import statistics
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Any, Optional
 
@@ -22,7 +23,7 @@ except ImportError:
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
-from detect_core import pipeline
+from detect_core import pipeline, tracing
 from detect_core.contracts import (
     CONTRACT_VERSION, DEFAULT_EXCLUDE_DIRS, DEFAULT_INCLUDE_TYPES, CommandAck, CreateScanRequest,
     CreateScanResponse, DetectRequest, DetectResponse, DeviceView, Finding, HeartbeatRequest,
@@ -84,7 +85,7 @@ log = logging.getLogger("kavach")
 log.handlers = [_handler]
 log.setLevel(logging.INFO)
 log.propagate = False
-for noisy in ("httpx", "google_genai", "google_genai.models"):
+for noisy in ("httpx", "google_genai", "google_genai.models", "langsmith"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
 
 app = FastAPI(title="kavach-server", version=CONTRACT_VERSION)
@@ -186,10 +187,18 @@ def detect(body: DetectRequest, request: Request) -> DetectResponse:
     if len(body.files) > MAX_FILES or len(body.chunks) > MAX_CHUNKS:
         raise err(413, "BATCH_TOO_LARGE", f"at most {MAX_FILES} files and {MAX_CHUNKS} chunks")
     dev = body.device_id
-    resp = pipeline.detect(
-        body, POLICY, mode="server",
-        verifier=lambda items: llm.verify_batch(items, device_id=dev),
-        doc_classifier=lambda head, name: llm.classify_document(head, name, device_id=dev))
+    # Parent LangSmith run groups this request's Gemini calls. Counts only, never chunk text.
+    with tracing.span("detect", inputs={"device_id": dev, "scan_id": body.scan_id,
+                                        "files": len(body.files), "chunks": len(body.chunks),
+                                        "file_types": sorted({f.file_type for f in body.files})},
+                      metadata={"device_id": dev, "scan_id": body.scan_id},
+                      tags=["kavach", "detect"]) as sp:
+        resp = pipeline.detect(
+            body, POLICY, mode="server",
+            verifier=lambda items: llm.verify_batch(items, device_id=dev),
+            doc_classifier=lambda head, name: llm.classify_document(head, name, device_id=dev))
+        sp.end({"stats": resp.stats, "pending": resp.pending,
+                "by_tier": dict(Counter(f.sensitivity_tier for f in resp.findings if f.finding_kind == "item"))})
     db.upsert_findings(resp.findings, actions_for=_actions_for)
     db.add_files_scanned(dev, sum(1 for f in body.files if f.status == "ok"))
     log.info("detect", extra={"extra_fields": {"device_id": dev, "scan_id": body.scan_id,
