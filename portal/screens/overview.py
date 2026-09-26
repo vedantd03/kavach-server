@@ -36,21 +36,6 @@ def live() -> None:
     c4.metric("Pending approvals", s.get("pending_approvals", 0),
               help="Actions the policy suggested that nobody has approved yet.")
 
-    st.subheader("Fix first")
-    rows = []
-    for f in s.get("top_risky_files", []):
-        name, _ = ui.split_path(f["file_path"])
-        rows.append([
-            views.link(views.file_href(f["device_id"], f["file_path"]), ui.e(name))
-            + f'<div class="mono faint">{ui.e(ui.short_folder(f["file_path"], 3))}</div>',
-            ui.badge(f.get("sensitivity_tier")),
-            f'<b>{f["max_risk_score"]:.0f}</b>',
-            str(f["findings"]),
-            f'<span class="mono">{ui.e(f["device_id"])}</span>',
-        ])
-    ui.html_block(f'<div style="overflow-x:auto">{ui.table(["File", "Tier", "Risk", "Items", "Laptop"], rows, {2, 3})}</div>'
-                  if rows else '<p class="faint">No findings yet.</p>')
-
     st.subheader("Laptops")
     per_dev: dict[str, Counter] = defaultdict(Counter)
     for f in files:
@@ -76,7 +61,7 @@ def live() -> None:
     with left:
         st.subheader("Files by tier")
         df = pd.DataFrame([{"tier": t.capitalize(), "files": ftier.get(t, 0), "o": i} for i, t in enumerate(ui.TIERS)])
-        st.altair_chart(alt.Chart(df).mark_bar(cornerRadiusEnd=3, height=18).encode(
+        st.altair_chart(alt.Chart(df).mark_bar(cornerRadiusEnd=3).encode(
             x=alt.X("files:Q", title=None, axis=alt.Axis(tickMinStep=1, grid=False)),
             y=alt.Y("tier:N", sort=alt.SortField("o"), title=None, axis=alt.Axis(ticks=False, domain=False)),
             color=alt.Color("tier:N", legend=None, scale=alt.Scale(
@@ -87,11 +72,26 @@ def live() -> None:
         by_type = s.get("by_type", {})
         tdf = pd.DataFrame([{"type": ui.TYPE_LABEL.get(k, k), "items": v} for k, v in by_type.items()])
         if not tdf.empty:
-            st.altair_chart(alt.Chart(tdf).mark_bar(color="#171717", cornerRadiusEnd=3, height=14).encode(
+            st.altair_chart(alt.Chart(tdf).mark_bar(color="#171717", cornerRadiusEnd=3).encode(
                 x=alt.X("items:Q", title=None, axis=alt.Axis(grid=False)),
                 y=alt.Y("type:N", sort="-x", title=None, axis=alt.Axis(ticks=False, domain=False)),
-                tooltip=["type", "items"]).properties(height=max(150, 24 * len(tdf))).configure_view(stroke=None),
+                tooltip=["type", "items"]).properties(height=max(150, 30 * len(tdf))).configure_view(stroke=None),
                 width="stretch")
+    st.subheader("Fix first")
+    rows = []
+    for f in s.get("top_risky_files", []):
+        name, _ = ui.split_path(f["file_path"])
+        rows.append([
+            views.link(views.file_href(f["device_id"], f["file_path"]), ui.e(name))
+            + f'<div class="mono faint">{ui.e(ui.short_folder(f["file_path"], 3))}</div>',
+            ui.badge(f.get("sensitivity_tier")),
+            f'<b>{f["max_risk_score"]:.0f}</b>',
+            str(f["findings"]),
+            f'<span class="mono">{ui.e(f["device_id"])}</span>',
+        ])
+    ui.html_block(f'<div style="overflow-x:auto">{ui.table(["File", "Tier", "Risk", "Items", "Laptop"], rows, {2, 3})}</div>'
+                  if rows else '<p class="faint">No findings yet.</p>')
+
     st.caption(f"Updated {time.strftime('%H:%M:%S')}. Refreshes every {ui.REFRESH_SEC:g} seconds.")
 
 

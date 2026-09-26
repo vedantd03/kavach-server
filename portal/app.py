@@ -25,10 +25,10 @@ import streamlit as st  # noqa: E402
 
 import ui  # noqa: E402
 
-st.set_page_config(page_title="Kavach Console", page_icon=str(HERE / "assets" / "logo.svg"),
+st.set_page_config(page_title="Kavach Console", page_icon=str(HERE / "assets" / "icon.png"),
                    layout="wide", initial_sidebar_state="collapsed")
 ui.setup()
-st.logo(str(HERE / "assets" / "logo.svg"), size="large")
+st.logo(str(HERE / "assets" / "logo.png"), size="large")
 
 
 def _signed_in() -> bool:

@@ -57,6 +57,7 @@ table.t td.nw { white-space: nowrap; }
 a.lnk { color: var(--fg) !important; text-decoration: none; border-bottom: 1px solid #D4D4D4; }
 a.lnk:hover { border-bottom-color: var(--fg); }
 a.lnk:focus-visible { outline: 2px solid #0070F3; outline-offset: 2px; border-radius: 2px; }
+img[data-testid="stHeaderLogo"] { height: 34px !important; width: auto !important; max-width: none !important; margin-right: 18px; }
 .crumb { font-size: 13px; color: var(--muted); margin: 22px 0 -6px; line-height: 1.6; }
 </style>
 """
