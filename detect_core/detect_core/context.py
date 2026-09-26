@@ -16,6 +16,7 @@ CUE_CAP = 0.50
 NEG_CUE = -0.45
 HEADER = 0.35
 WINDOW = 60
+NEG_AFTER = 15  # look-alike labels precede the number ("Invoice No: ...")
 
 
 def lexicon_key(pii_type: str) -> str:
@@ -81,7 +82,8 @@ def score(cand: Candidate, norm_text: str, column_header: Optional[str] = None,
         bonus = min(CUE_CAP, CUE_FIRST + CUE_EXTRA * (len(pos_hits) - 1))
         s += bonus
         parts.append(f"cue '{pos_hits[0]}' +{bonus:.2f}")
-    neg_hits = _found(neg, window)
+    neg_window = norm_text[lo:cand.start] + " " + norm_text[cand.end:min(len(norm_text), cand.end + NEG_AFTER)]
+    neg_hits = _found(neg, neg_window)
     if neg_hits:
         s += NEG_CUE
         parts.append(f"negative cue '{neg_hits[0]}' {NEG_CUE:.2f}")
