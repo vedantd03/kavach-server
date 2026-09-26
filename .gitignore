@@ -14,3 +14,4 @@ logs/
 .install.log
 data_server.log
 smoke_out.txt
+docker_build.log
