@@ -6,8 +6,14 @@ import pandas as pd
 import streamlit as st
 
 import ui
+import views
 
 api = ui.api()
+_dev, _file = st.query_params.get("device"), st.query_params.get("file")
+if _dev and _file:
+    views.render_file(_dev, _file)
+    st.stop()
+
 ui.header("Findings", "Every detected item and why it was decided. Values are masked.")
 
 devices = ui.call(api.devices)
@@ -15,16 +21,16 @@ summary = ui.call(api.summary)
 
 with st.container(border=True):
     c1, c2, c3, c4 = st.columns(4)
-    device = c1.selectbox("Device", ["All devices"] + [d.device_id for d in devices])
-    tier = c2.selectbox("Final tier", ["All tiers"] + [t.capitalize() for t in ui.TIERS])
+    device = c1.selectbox("Laptop", ["All devices"] + sorted(d.device_id for d in devices), key="f_device")
+    tier = c2.selectbox("Final tier", ["All tiers"] + [t.capitalize() for t in ui.TIERS], key="f_tier")
     types = sorted(summary.get("by_type", {}).keys())
-    ptype = c3.selectbox("Type", ["All types"] + types, format_func=lambda t: ui.TYPE_LABEL.get(t, t))
-    folder = c4.selectbox("Folder", ["All folders"] + list(ui.FOLDER_LABEL),
+    ptype = c3.selectbox("Type", ["All types"] + types, format_func=lambda t: ui.TYPE_LABEL.get(t, t), key="f_type")
+    folder = c4.selectbox("Folder", ["All folders"] + list(ui.FOLDER_LABEL), key="f_folder",
                           format_func=lambda f: ui.FOLDER_LABEL.get(f, f))
     c5, c6 = st.columns([1, 3])
-    view = c5.segmented_control("Show", ["Items", "Files"], default="Items",
+    view = c5.segmented_control("Show", ["Items", "Files"], default="Items", key="f_view",
                                 help="Items are individual identifiers. Files are one row per file with its overall tier.")
-    only_diff = c6.toggle("Only where the AI's suggestion differs from the final tier", value=False)
+    only_diff = c6.toggle("Only where the AI's suggestion differs from the final tier", value=False, key="f_diff")
 
 kind = "document" if view == "Files" else "item"
 findings = ui.call(api.findings,
@@ -77,7 +83,7 @@ df = pd.DataFrame(rows)
 if kind == "document":
     df = df.drop(columns=["Masked value"])
 
-st.caption(f"{len(df)} {'files' if kind == 'document' else 'items'}, highest risk first. Select a row for details.")
+st.caption(f"{len(df)} {'files' if kind == 'document' else 'items'}, highest risk first. Select a row to open its file.")
 def _tier_css(v: str) -> str:
     t = str(v).lower()
     return f"color: {ui.TIER_TEXT[t]}; font-weight: 500" if t in ui.TIER_TEXT else ""
@@ -97,13 +103,5 @@ event = st.dataframe(
 sel = event.selection.rows if event and event.selection else []
 if sel:
     f = findings[sel[0]]
-    with st.container(border=True):
-        st.markdown(f"{ui.badge(f.sensitivity_tier)} &nbsp; **{ui.TYPE_LABEL.get(f.pii_type or '', f.doc_type)}** "
-                    f"{f.masked_value or ''}", unsafe_allow_html=True)
-        a, b = st.columns(2)
-        a.markdown(f"**Why this tier (code)**  \n{f.tier_reason}")
-        a.markdown(f"**AI suggested tier**  \n{(f.llm_suggested_tier or 'none').capitalize()}")
-        b.markdown(f"**Why detected**  \n{f.reason}")
-        b.markdown(f"**Where**  \n`{f.file_path}`  \n{f.location}")
-        st.caption(f"Finding {f.finding_id}, holder {f.holder}, category {f.category}, "
-                   f"decided by {f.decided_by}, detected {f.detected_at}")
+    st.query_params.update({"device": f.device_id, "file": f.file_path})
+    st.rerun()

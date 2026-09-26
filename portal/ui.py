@@ -54,6 +54,10 @@ table.t td.nw { white-space: nowrap; }
   color:#333; font-size:13.5px; }
 .bar { display:flex; height:8px; border-radius:4px; overflow:hidden; background:#F2F2F2; min-width:120px; }
 .bar span { display:block; height:100%; }
+a.lnk { color: var(--fg) !important; text-decoration: none; border-bottom: 1px solid #D4D4D4; }
+a.lnk:hover { border-bottom-color: var(--fg); }
+a.lnk:focus-visible { outline: 2px solid #0070F3; outline-offset: 2px; border-radius: 2px; }
+.crumb { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
 </style>
 """
 

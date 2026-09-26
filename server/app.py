@@ -292,11 +292,11 @@ def list_devices() -> list[dict]:
 def list_findings(device_id: Optional[str] = None, scan_id: Optional[str] = None,
                   tier: Optional[str] = None, category: Optional[str] = None,
                   type: Optional[str] = None, folder: Optional[str] = None,
-                  kind: Optional[str] = None,
+                  kind: Optional[str] = None, file: Optional[str] = None,
                   limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0)) -> list[dict]:
     return db.findings({"device_id": device_id, "scan_id": scan_id, "sensitivity_tier": tier,
                         "category": category, "pii_type": type, "folder_class": folder,
-                        "finding_kind": kind}, limit, offset)
+                        "finding_kind": kind, "file_path": file}, limit, offset)
 
 
 def _counts(sql: str) -> dict[str, int]:

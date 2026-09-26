@@ -36,3 +36,4 @@ Additions only; nothing in API.md was renamed or removed.
    masked values show at most 4 characters, no text/raw-value columns, traces hold counts only,
    no key column, LangSmith scrubbing on. Returns `{ok, checks: [{name, ok, detail, offending_ids}]}`
    with counts and ids only.
+9. **`/admin/findings`** adds a `file` filter (exact `file_path`), used by the console's file view.

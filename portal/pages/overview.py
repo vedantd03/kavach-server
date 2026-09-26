@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 
 import ui
+import views
 
 ui.header("Overview", "Where sensitive data sits across your laptops, and what to fix first.")
 
@@ -40,7 +41,8 @@ def live() -> None:
     for f in s.get("top_risky_files", []):
         name, _ = ui.split_path(f["file_path"])
         rows.append([
-            f'{ui.e(name)}<div class="mono faint">{ui.e(ui.short_folder(f["file_path"], 3))}</div>',
+            views.link(views.file_href(f["device_id"], f["file_path"]), ui.e(name))
+            + f'<div class="mono faint">{ui.e(ui.short_folder(f["file_path"], 3))}</div>',
             ui.badge(f.get("sensitivity_tier")),
             f'<b>{f["max_risk_score"]:.0f}</b>',
             str(f["findings"]),

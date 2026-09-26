@@ -7,6 +7,7 @@ from collections import defaultdict
 import streamlit as st
 
 import ui
+import views
 
 ACTION_LABEL = {"quarantine": "Quarantine", "encrypt": "Encrypt", "masked_copy": "Masked copy",
                 "suggest_delete": "Suggest delete"}
@@ -56,7 +57,8 @@ for aid, ev in items:
     label, color = STATE.get(ev["event"], (ev["event"], "#A1A1A1"))
     who = f'<div class="faint" style="font-size:12px">by {ui.e(ev["actor"])}</div>' if ev["event"] != "action.suggested" else ""
     rows.append([
-        f'{ui.e(name)}<div class="mono faint">{ui.e(ui.short_folder(d.get("file_path", ""), 3))}</div>',
+        views.link(views.file_href(d.get("device_id", ""), d.get("file_path", "")), ui.e(name))
+        + f'<div class="mono faint">{ui.e(ui.short_folder(d.get("file_path", ""), 3))}</div>',
         f'<span class="mono">{ui.e(d.get("device_id", ""))}</span>',
         ui.badge(d.get("tier")),
         ui.e(ACTION_LABEL.get(d.get("action_type", ""), d.get("action_type", ""))),

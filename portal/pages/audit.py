@@ -40,7 +40,7 @@ def summarise(event: str, d: dict) -> str:
 
 
 ui.header("Audit trail", "Who did what, when. Export it as the evidence pack.")
-group = st.segmented_control("Show", list(GROUPS), default="Everything")
+group = st.segmented_control("Show", list(GROUPS), default="Everything", key="a_group")
 rows = ui.call(ui.api().audit, event=GROUPS.get(group or "Everything"), limit=5000)
 
 if not rows:

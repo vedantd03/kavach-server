@@ -62,11 +62,15 @@ class Api:
     def findings(self, device_id: Optional[str] = None, scan_id: Optional[str] = None,
                  tier: Optional[str] = None, category: Optional[str] = None,
                  type: Optional[str] = None, folder: Optional[str] = None,
-                 kind: Optional[str] = None, limit: int = 1000, offset: int = 0) -> list[Finding]:
+                 kind: Optional[str] = None, file: Optional[str] = None,
+                 limit: int = 1000, offset: int = 0) -> list[Finding]:
         rows = self._get("/admin/findings", device_id=device_id, scan_id=scan_id, tier=tier,
-                         category=category, type=type, folder=folder, kind=kind,
+                         category=category, type=type, folder=folder, kind=kind, file=file,
                          limit=limit, offset=offset)
         return [Finding.model_validate(r) for r in rows]
+
+    def scan(self, scan_id: str) -> ScanView:
+        return ScanView.model_validate(self._get(f"/admin/scans/{scan_id}"))
 
     def scans(self, device_id: Optional[str] = None, limit: int = 20) -> list[ScanView]:
         return [ScanView.model_validate(s) for s in self._get("/admin/scans", device_id=device_id, limit=limit)]

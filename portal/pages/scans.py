@@ -6,6 +6,7 @@ import time
 import streamlit as st
 
 import ui
+import views
 from api_client import ApiError
 from detect_core.contracts import DEFAULT_EXCLUDE_DIRS, DEFAULT_INCLUDE_TYPES, CreateScanRequest
 
@@ -28,6 +29,11 @@ def clean_roots(raw: str) -> list[str]:
 
 
 api = ui.api()
+_scan = st.query_params.get("scan")
+if _scan:
+    views.render_scan(_scan)
+    st.stop()
+
 ui.header("Scans", "Start a scan on a laptop and follow it as it runs.")
 devices = ui.call(api.devices)
 
@@ -38,9 +44,13 @@ with st.container(border=True):
     else:
         with st.form("start-scan", border=False):
             c1, c2 = st.columns([1, 2])
-            labels = {d.device_id: f"{d.device_id}  ({'online' if d.online else 'offline, last seen ' + ui.ago(d.last_seen)})"
-                      for d in devices}
-            device = c1.selectbox("Laptop", list(labels), format_func=labels.get)
+            # Options and labels must stay identical across reruns, or Streamlit resets the choice.
+            ids = sorted(d.device_id for d in devices)
+            device = c1.selectbox("Laptop", ids, key="scan_device",
+                                  help="Laptops appear here after their agent checks in once.")
+            dev = next(d for d in devices if d.device_id == device)
+            c1.caption(("Online now." if dev.online else f"Offline, last seen {ui.ago(dev.last_seen)}. "
+                        "The scan starts when it next checks in."))
             roots_raw = c2.text_area(
                 "Folders to scan", height=96,
                 placeholder="One folder per line, for example\nC:\\Users\\priya\\Documents\nC:\\Users\\priya\\Downloads",
@@ -94,7 +104,8 @@ def recent() -> None:
         tiers = ", ".join(f"{v} {k}" for k, v in s.findings_by_tier.items()) or "-"
         dur = f"{s.duration_ms / 1000:.0f}s" if s.duration_ms else "-"
         rows.append([
-            f'<span class="mono">{ui.e(s.scan_id)}</span><div class="faint" style="font-size:12px">{ui.e(ui.ago(s.created_at))}</div>',
+            views.link(views.scan_href(s.scan_id), f'<span class="mono">{ui.e(s.scan_id)}</span>')
+            + f'<div class="faint" style="font-size:12px">{ui.e(ui.ago(s.created_at))}</div>',
             f'<span class="mono">{ui.e(s.device_id)}</span>',
             "<br>".join(f'<span class="mono">{ui.e(r)}</span>' for r in s.roots),
             ui.status(STATUS_LABEL.get(s.status, s.status), STATUS_COLOR.get(s.status, "#A1A1A1")) + note,
@@ -104,7 +115,7 @@ def recent() -> None:
         ])
     ui.html_block('<div style="overflow-x:auto">' + ui.table(
         ["Scan", "Laptop", "Folders", "Status", "Progress", "Items", "Took"], rows, {6}) + "</div>")
-    st.caption(f"Updated {time.strftime('%H:%M:%S')}.")
+    st.caption(f"Updated {time.strftime('%H:%M:%S')}. Select a scan to see what it found.")
 
 
 recent()
