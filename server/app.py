@@ -201,6 +201,11 @@ def detect(body: DetectRequest, request: Request) -> DetectResponse:
                 "by_tier": dict(Counter(f.sensitivity_tier for f in resp.findings if f.finding_kind == "item"))})
     db.upsert_findings(resp.findings, actions_for=_actions_for)
     db.add_files_scanned(dev, sum(1 for f in body.files if f.status == "ok"))
+    items = [f for f in resp.findings if f.finding_kind == "item"]
+    db.record(dev, "findings.recorded", details={
+        "scan_id": body.scan_id, "files": len(body.files), "items": len(items),
+        "by_tier": dict(Counter(f.sensitivity_tier for f in items)),
+        "decided_by": dict(Counter(f.decided_by for f in items)), "pending": resp.pending})
     log.info("detect", extra={"extra_fields": {"device_id": dev, "scan_id": body.scan_id,
                                                 **{k: v for k, v in resp.stats.items()}}})
     return resp
@@ -287,10 +292,11 @@ def list_devices() -> list[dict]:
 def list_findings(device_id: Optional[str] = None, scan_id: Optional[str] = None,
                   tier: Optional[str] = None, category: Optional[str] = None,
                   type: Optional[str] = None, folder: Optional[str] = None,
+                  kind: Optional[str] = None,
                   limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0)) -> list[dict]:
     return db.findings({"device_id": device_id, "scan_id": scan_id, "sensitivity_tier": tier,
-                        "category": category, "pii_type": type, "folder_class": folder},
-                       limit, offset)
+                        "category": category, "pii_type": type, "folder_class": folder,
+                        "finding_kind": kind}, limit, offset)
 
 
 def _counts(sql: str) -> dict[str, int]:
@@ -311,8 +317,19 @@ def summary() -> dict[str, Any]:
     top = [{"device_id": f["device_id"], "file_path": f["file_path"],
             "sensitivity_tier": f["doc_tier"], "max_risk_score": f["max_risk_score"],
             "risk_band": POLICY.band(f["max_risk_score"] or 0), "findings": f["findings"]} for f in files]
+    files_by_tier = {t: 0 for t in POLICY.tiers}
+    files_by_tier.update(_counts("SELECT sensitivity_tier AS k, count(*) AS n FROM findings "
+                                 "WHERE finding_kind = 'document' GROUP BY 1"))
+    high = db.one("SELECT count(*) AS n FROM (SELECT device_id, file_path FROM findings "
+                  "GROUP BY device_id, file_path HAVING max(risk_score) >= ?)",
+                  (POLICY.risk_bands["high"],)) or {"n": 0}
+    pending = db.one("SELECT count(*) AS n FROM actions WHERE status = 'suggested'") or {"n": 0}
+    online = db.one("SELECT count(*) AS n FROM devices WHERE last_seen >= ?", (ago(ONLINE_SEC),)) or {"n": 0}
     return {
-        "devices": dev.get("devices", 0), "files_scanned": dev.get("files", 0),
+        "devices": dev.get("devices", 0), "devices_online": online["n"],
+        "files_scanned": dev.get("files", 0),
+        "files_by_tier": files_by_tier, "high_risk_files": high["n"],
+        "pending_approvals": pending["n"],
         "findings_total": sum(by_tier.values()),
         "by_tier": by_tier,
         "by_category": _counts(f"SELECT category AS k, count(*) AS n {items} GROUP BY 1"),
@@ -343,6 +360,13 @@ def pipeline_stats() -> dict[str, Any]:
             "llm_errors": errors["n"], "key_rotations": rot["r"], "p50_latency_ms": p50,
             "tokens": {"in": tok.get("i", 0), "out": tok.get("o", 0)},
             "est_cost_usd": round(cost, 4)}
+
+
+@app.get("/admin/audit", dependencies=[Depends(admin_auth)])
+def list_audit(action_id: Optional[str] = None, event: Optional[str] = None,
+               limit: int = Query(500, ge=1, le=5000), offset: int = Query(0, ge=0)) -> list[dict]:
+    """Newest first. `event` matches a prefix, e.g. `scan.` or `action.`."""
+    return db.audit_rows(action_id, event, limit, offset)
 
 
 @app.get("/admin/eval", dependencies=[Depends(admin_auth)])

@@ -69,6 +69,21 @@ class DB:
         rows = self.q(sql, args)
         return rows[0] if rows else None
 
+    # ------------------------------------------------------------ audit
+    @staticmethod
+    def audit(con: sqlite3.Connection, actor: str, event: str, action_id: Optional[str] = None,
+              finding_id: Optional[str] = None, details: Optional[dict[str, Any]] = None) -> None:
+        """Append one audit row inside the caller's transaction. Details hold ids, counts,
+        tiers and file paths only: never extracted text or raw values."""
+        con.execute("INSERT INTO audit(audit_id, ts, actor, event, action_id, finding_id, details_json) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    ("aud_" + uuid.uuid4().hex[:16], utc_now(), actor, event, action_id, finding_id,
+                     json.dumps(details or {})))
+
+    def record(self, actor: str, event: str, **kw: Any) -> None:
+        with self.tx() as c:
+            self.audit(c, actor, event, **kw)
+
     # ------------------------------------------------------------ devices
     def touch_device(self, device_id: str, con: Optional[sqlite3.Connection] = None) -> None:
         sql = ("INSERT INTO devices(device_id, last_seen, files_scanned) VALUES (?, ?, 0) "
@@ -109,12 +124,18 @@ class DB:
                 d["masked_in_source"] = int(d["masked_in_source"])
                 c.execute(sql, [d[k] for k in FINDING_COLS])
                 for action_type in (actions_for(f) if actions_for else []):
-                    c.execute(
+                    action_id = "act_" + uuid.uuid4().hex[:16]
+                    cur = c.execute(
                         "INSERT OR IGNORE INTO actions(action_id, device_id, finding_id, file_path, "
                         "action_type, status, approver, created_at, updated_at) "
                         "VALUES (?,?,?,?,?, 'suggested', NULL, ?, ?)",
-                        ("act_" + uuid.uuid4().hex[:16], f.device_id, f.finding_id, f.file_path,
-                         action_type, now, now))
+                        (action_id, f.device_id, f.finding_id, f.file_path, action_type, now, now))
+                    if cur.rowcount == 1:
+                        self.audit(c, "policy", "action.suggested", action_id=action_id,
+                                   finding_id=f.finding_id,
+                                   details={"device_id": f.device_id, "file_path": f.file_path,
+                                            "action_type": action_type, "tier": f.sensitivity_tier,
+                                            "policy_version": f.policy_version})
         return len(findings)
 
     def findings(self, where: dict[str, Any], limit: int, offset: int) -> list[dict[str, Any]]:
@@ -158,6 +179,9 @@ class DB:
             c.execute("INSERT INTO commands(command_id, device_id, type, payload_json, status, "
                       "created_at) VALUES (?,?,'SCAN',?,'pending',?)",
                       (command_id, device_id, json.dumps(payload), now))
+            self.audit(c, "admin", "scan.requested",
+                       details={"scan_id": scan_id, "command_id": command_id, "device_id": device_id,
+                                "roots": payload["roots"], "force": bool(payload.get("force"))})
         return scan_id, command_id
 
     def next_command(self, device_id: str, redelivery_sec: float) -> Optional[dict[str, Any]]:
@@ -178,6 +202,8 @@ class DB:
             c.execute("UPDATE scans SET status = 'delivered', delivered_at = ? "
                       "WHERE scan_id = ? AND status IN ('queued', 'delivered')",
                       (now, payload.get("scan_id")))
+            self.audit(c, device_id, "scan.delivered",
+                       details={"scan_id": payload.get("scan_id"), "command_id": row["command_id"]})
         return {"command_id": row["command_id"], "type": row["type"],
                 "created_at": row["created_at"], "payload": payload}
 
@@ -192,6 +218,8 @@ class DB:
             c.execute("UPDATE commands SET status = ?, acked_at = ?, reject_reason = ? "
                       "WHERE command_id = ?", (status, now, reason, command_id))
             scan_id = json.loads(row["payload_json"]).get("scan_id")
+            self.audit(c, row["device_id"], f"scan.{status}",
+                       details={"scan_id": scan_id, "command_id": command_id, "reason": reason})
             if status == "accepted":
                 c.execute("UPDATE scans SET status = 'running', started_at = ? WHERE scan_id = ? "
                           "AND status IN ('queued', 'delivered')", (now, scan_id))
@@ -225,11 +253,31 @@ class DB:
             if row["status"] in ("completed", "failed"):
                 return True  # idempotent
             sets = ", ".join(f"{k} = ?" for k in SCAN_COUNTS)
+            dev = c.execute("SELECT device_id FROM scans WHERE scan_id = ?", (scan_id,)).fetchone()
+            self.audit(c, dev["device_id"], f"scan.{body['status']}",
+                       details={"scan_id": scan_id, "files_done": body.get("files_done", 0),
+                                "files_unscannable": body.get("files_unscannable", 0),
+                                "findings": body.get("findings", 0), "duration_ms": body.get("duration_ms")})
             c.execute(f"UPDATE scans SET {sets}, status = ?, error = ?, duration_ms = ?, "
                       "crawl_complete = 1, completed_at = ? WHERE scan_id = ?",
                       [int(body.get(k, 0)) for k in SCAN_COUNTS] +
                       [body["status"], body.get("error"), body.get("duration_ms"), utc_now(), scan_id])
         return True
+
+    def audit_rows(self, action_id: Optional[str], event: Optional[str], limit: int,
+                   offset: int) -> list[dict[str, Any]]:
+        clauses, args = [], []
+        if action_id:
+            clauses.append("action_id = ?")
+            args.append(action_id)
+        if event:
+            clauses.append("event LIKE ?")
+            args.append(event.rstrip("*") + "%")
+        sql = "SELECT * FROM audit" + (" WHERE " + " AND ".join(clauses) if clauses else "")
+        rows = self.q(sql + " ORDER BY ts DESC, rowid DESC LIMIT ? OFFSET ?", args + [limit, offset])
+        for r in rows:
+            r["details"] = json.loads(r.pop("details_json") or "{}")
+        return rows
 
     def scan_view(self, row: dict[str, Any]) -> dict[str, Any]:
         tiers = {r["sensitivity_tier"]: r["n"] for r in self.q(

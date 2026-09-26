@@ -20,3 +20,15 @@ Additions only; nothing in API.md was renamed or removed.
    file-level), not against each item finding.
 6. **Keys**: the server reads `GEMINI_API_KEYS` (comma-separated) and falls back to
    `GEMINI_API_KEY_1..N`.
+7. **Phase 3 console additions** (additive):
+   - `GET /admin/audit?action_id=&event=&limit=500&offset=0` (reserved for 1B in API.md; built now
+     for the audit trail). `event` is a prefix (`scan.`, `findings.`, `action.`). Rows:
+     `{audit_id, ts, actor, event, action_id, finding_id, details}`; details hold ids, counts, tiers
+     and file paths only.
+   - Audit events written today: `scan.requested|delivered|accepted|rejected|completed|failed`,
+     `findings.recorded` (per `/detect` batch, counts only), `action.suggested` (actor `policy`).
+     1B adds `action.approved|rejected|done|failed`.
+   - `/admin/summary` adds `devices_online`, `files_by_tier` (from document findings),
+     `high_risk_files` (files with max risk >= `risk_bands.high`) and `pending_approvals`
+     (actions with status `suggested`).
+   - `/admin/findings` adds a `kind` filter (`item` | `document`).
