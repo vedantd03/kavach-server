@@ -1,7 +1,7 @@
 """Text normalisation with an offset map back to the original string.
 
 - Devanagari digits (U+0966..U+096F) -> ASCII digits.
-- Digit groups split by a single space, hyphen or newline are rejoined
+- Digit groups split by a single space, hyphen or newline (LF or CRLF) are rejoined
   ("2341 2341 2346" -> "234123412346"), greedily while the joined run stays <= 12 digits
   and every piece is >= 2 digits. A column of full-length numbers is never merged.
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 
 _DEVANAGARI = {chr(0x0966 + i): str(i) for i in range(10)}
-_SEPS = {" ", "-", "\n"}
+_GAPS = {" ", "-", "\n", "\r\n"}
 _MAX_JOIN = 12
 _MIN_PIECE = 2
 _RUNS = re.compile(r"\d+")
@@ -33,10 +33,10 @@ def normalise(text: str) -> tuple[str, list[int]]:
         while j + 1 < len(runs):
             ns, ne = runs[j + 1]
             cur_s, cur_e = runs[j]
-            gap_ok = ns - cur_e == 1 and ascii_text[cur_e] in _SEPS
+            gap_ok = ascii_text[cur_e:ns] in _GAPS
             pieces_ok = (cur_e - cur_s) >= _MIN_PIECE and (ne - ns) >= _MIN_PIECE
             if gap_ok and pieces_ok and total + (ne - ns) <= _MAX_JOIN:
-                drop.add(cur_e)
+                drop.update(range(cur_e, ns))
                 total += ne - ns
                 j += 1
             else:

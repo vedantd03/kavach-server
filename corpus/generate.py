@@ -222,7 +222,7 @@ def whatsapp_chat() -> None:
         f"[13/09/26, 09:03:30] {b['first']}: aur mera email {b['email']} hai",
         "[13/09/26, 09:05:00] Support Desk: Dhanyavaad, ho jayega.",
     ]
-    out(rel).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    out(rel).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     t = "confidential"
     for ty, v in (("AADHAAR", a["aadhaar"]), ("PAN_INDIVIDUAL", a["pan"]), ("MOBILE_IN", a["mobile"]),
                   ("UPI_ID", a["upi"]), ("AADHAAR", b["aadhaar"]), ("EMAIL", b["email"])):
@@ -280,7 +280,7 @@ def vendor_bill_and_signature() -> None:
         f"ACME OFFICE SUPPLIES PVT LTD\nGSTIN: {g}\nCompany PAN: {company_pan}\n"
         f"Bill No: B-{rng.randint(1000, 9999)}  Date: 14/09/2026\n"
         "Printer cartridges x 10 ..... Rs 12,500.00\nGST 18% ....................... Rs 2,250.00\n"
-        f"Customer care helpline: {helpline}\nPayment due in 30 days.\n", encoding="utf-8")
+        f"Customer care helpline: {helpline}\nPayment due in 30 days.\n", encoding="utf-8", newline="\n")
     label(rel, "GSTIN", g, True, "business", "internal")
     label(rel, "PAN_BUSINESS", company_pan, True, "business", "internal")
     label(rel, "MOBILE_IN", helpline, False, "business", "internal")
@@ -293,7 +293,7 @@ def vendor_bill_and_signature() -> None:
         f"From: {p['name']} <{work_email}>\nTo: team@acmecorp.in\nSubject: Re: Quarterly review\n\n"
         "Hi team,\nAttaching the review deck. Let's sync on Thursday.\n\nRegards,\n"
         f"{p['name']}\nRegional Manager, Acme Corp\nToll free helpline: {toll}\nwww.acmecorp.in\n",
-        encoding="utf-8")
+        encoding="utf-8", newline="\n")
     label(rel, "EMAIL", work_email, True, "individual", "internal")
     label(rel, "MOBILE_IN", toll, False, "business", "internal")
 
@@ -304,7 +304,7 @@ def config_backup() -> None:
     gh = "ghp_" + "".join(rng.choice(string.ascii_letters + string.digits) for _ in range(36))
     out(rel).write_text(
         f"# backup of prod env - do not share\nAPP_ENV=production\nAWS_ACCESS_KEY_ID={aws}\n"
-        f"GITHUB_TOKEN={gh}\nLOG_LEVEL=info\nMAX_WORKERS=8\n", encoding="utf-8")
+        f"GITHUB_TOKEN={gh}\nLOG_LEVEL=info\nMAX_WORKERS=8\n", encoding="utf-8", newline="\n")
     label(rel, "SECRET", aws, True, "unknown", "restricted")
     label(rel, "SECRET", gh, True, "unknown", "restricted")
 
@@ -315,7 +315,7 @@ def marked_and_masked() -> None:
     out(rel).write_text(
         "STRICTLY CONFIDENTIAL\n\nNote to the Board: proposed restructuring of the Pune unit.\n"
         f"Nominated director: {p['name']}, PAN {p['pan']}.\n"
-        "The board is requested to approve the proposal at the next meeting.\n", encoding="utf-8")
+        "The board is requested to approve the proposal at the next meeting.\n", encoding="utf-8", newline="\n")
     label(rel, "PAN_INDIVIDUAL", p["pan"], True, "individual", "restricted")
 
     rel = "Documents/address_proof_letter.txt"
@@ -323,7 +323,7 @@ def marked_and_masked() -> None:
     out(rel).write_text(
         f"To whom it may concern,\n\nThis is to certify that {p['name']} resides at {p['address']}.\n"
         "Aadhaar: XXXX XXXX 4821 (masked as per UIDAI guidelines)\n\nRegards,\nAdmin Office\n",
-        encoding="utf-8")
+        encoding="utf-8", newline="\n")
     label(rel, "AADHAAR", "XXXXXXXX4821", True, "individual", "confidential")
 
 
@@ -335,7 +335,7 @@ def bank_details() -> None:
         acct, code = bank_account(), ifsc()
         lines.append(f"Beneficiary: {p['name']}\nA/c no: {acct}\nIFSC: {code}\n")
         label(rel, "BANK_ACCOUNT", acct, True, "individual", "confidential")
-    out(rel).write_text("\n".join(lines), encoding="utf-8")
+    out(rel).write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
 def synced_contacts() -> None:
@@ -369,7 +369,7 @@ def extra_files() -> None:
         f"ACME CORP - SALARY SLIP - SEPTEMBER 2026\nEmployee: {p['name']}   Emp code: E{rng.randint(1000, 9999)}\n"
         f"PAN: {p['pan']}\nSalary credited to A/c {acct} (IFSC {code})\n"
         "Basic 45,000 | HRA 18,000 | Special 12,500 | PF -5,400 | TDS -6,200\nNet pay: 63,900\n",
-        encoding="utf-8")
+        encoding="utf-8", newline="\n")
     label(rel, "PAN_INDIVIDUAL", p["pan"], True, "individual", "confidential")
     label(rel, "BANK_ACCOUNT", acct, True, "individual", "confidential")
 
@@ -379,7 +379,7 @@ def extra_files() -> None:
         f"From: {p['name']} <{p['email']}>\nTo: care@acmecorp.in\nSubject: KYC rejected again\n\n"
         f"Hello, my KYC was rejected twice. My Aadhaar number is {spaced(p['aadhaar'])} and my mobile is "
         f"+91 {p['mobile'][:5]} {p['mobile'][5:]}. Please call me.\n\nThanks,\n{p['first']}\n",
-        encoding="utf-8")
+        encoding="utf-8", newline="\n")
     for t, v in (("EMAIL", p["email"]), ("AADHAAR", p["aadhaar"]), ("MOBILE_IN", p["mobile"])):
         label(rel, t, v, True, "individual", "confidential")
 
@@ -400,16 +400,16 @@ def extra_files() -> None:
 def clean_files() -> None:
     out("Documents/sample_data_readme.txt").write_text(
         "This folder holds anonymised sample data for the analytics team.\n"
-        "Contact the data office for access requests. Last refreshed 2026-09-01.\n", encoding="utf-8")
+        "Contact the data office for access requests. Last refreshed 2026-09-01.\n", encoding="utf-8", newline="\n")
     out("Documents/meeting_notes.txt").write_text(
         "Weekly sync - 22/09/2026\n- Launch moved to Q4\n- Budget review on Friday at 3 PM\n"
-        "- Room 204 booked for 2 hours\n- Action: Priya to share the deck\n", encoding="utf-8")
+        "- Room 204 booked for 2 hours\n- Action: Priya to share the deck\n", encoding="utf-8", newline="\n")
     out("Documents/recipe_masala_chai.md").write_text(
         "# Masala chai\n\n2 cups water, 1 cup milk, 2 tsp tea, 4 cardamom pods, 1 inch ginger.\n"
-        "Boil 5 minutes. Serves 3.\n", encoding="utf-8")
+        "Boil 5 minutes. Serves 3.\n", encoding="utf-8", newline="\n")
     out("Desktop/todo.txt").write_text(
         "1. Renew laptop warranty\n2. Book train to Mumbai (12 Oct)\n3. Submit expense report 2026-09\n",
-        encoding="utf-8")
+        encoding="utf-8", newline="\n")
     with out("Documents/lunch_menu.csv").open("w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(["Day", "Dish", "Price"])
@@ -418,7 +418,7 @@ def clean_files() -> None:
             w.writerow([d, dish, pr])
     out("Documents/project_readme.md").write_text(
         "# Inventory dashboard\n\nRun `make dev` and open http://localhost:3000.\n"
-        "Version 1.4.2, released 2026-08-30. Build 20260830.\n", encoding="utf-8")
+        "Version 1.4.2, released 2026-08-30. Build 20260830.\n", encoding="utf-8", newline="\n")
 
 
 def main() -> None:
