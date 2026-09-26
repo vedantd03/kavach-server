@@ -26,7 +26,8 @@ _AADHAAR_MASKED = re.compile(r"(?<![\w])[Xx*]{4}[\s-]?[Xx*]{4}[\s-]?(\d{4})(?!\d
 _PAN = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{5}\d{4}[A-Za-z](?![A-Za-z0-9])")
 _GSTIN = re.compile(r"(?<![A-Za-z0-9])\d{2}[A-Za-z]{5}\d{4}[A-Za-z][1-9A-Za-z][Zz][0-9A-Za-z](?![A-Za-z0-9])")
 _UPI = re.compile(
-    r"(?<![\w.\-@])([\w.\-]{2,256})@(" + "|".join(UPI_PSPS) + r")(?![\w.\-@])", re.IGNORECASE)
+    # A trailing full stop ends the sentence ("pay ravi@oksbi."), but "@oksbi.com" is a domain.
+    r"(?<![\w.\-@])([\w.\-]{2,256})@(" + "|".join(UPI_PSPS) + r")(?![\w\-@])(?!\.[\w\-])", re.IGNORECASE)
 _EMAIL = re.compile(r"(?<![\w.+\-])[\w.+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}(?![\w\-])")
 _IFSC = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{4}0[A-Za-z0-9]{6}(?![A-Za-z0-9])")
 _BANK = re.compile(r"(?<![\d+])\d{9,18}(?!\d)")

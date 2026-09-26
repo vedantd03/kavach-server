@@ -19,6 +19,7 @@ from pydantic import BaseModel, ValidationError
 
 from . import tracing
 from .contracts import DocView, OcrResult, VerifyItem, VerifyVerdict
+from .masking import mask_text
 
 log = logging.getLogger("detect_core.llm")
 
@@ -403,12 +404,14 @@ class GeminiClient:
     def classify_document(self, masked_head: str, filename: str,
                           device_id: Optional[str] = None) -> DocView:
         system = _doc_system(self.policy)
-        prompt = f"Filename: {filename}\n---\n{masked_head[:1500]}"
+        # Filenames can carry identifiers ("aadhaar_2341....pdf"): same blanket mask as snippets.
+        safe_name = mask_text(filename)
+        prompt = f"Filename: {safe_name}\n---\n{masked_head[:1500]}"
         try:
             r = self._generate("classify", [prompt], system, _DocOut, 1, device_id,
                                cache_key=self._key("classify", system, prompt),
                                decisions=lambda r: {"doc_type": r.doc_type},
-                               trace_inputs={"system": system, "filename": filename,
+                               trace_inputs={"system": system, "filename": safe_name,
                                              "masked_head": masked_head[:1500]})
         except LLMUnavailable:
             return DocView(doc_type="unknown", markings=[], suggested_tier=None, confidence=0.0,

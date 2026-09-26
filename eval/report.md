@@ -11,11 +11,11 @@ Corpus: 29 files, 339 labels (290 sensitive, 49 hard negatives). Policy 2026-09-
 | Hard-negative rejection | 0.0 | 1.0 |
 | Under-labelling rate (files) | 0.103 | 0.0 |
 | Exact file tier | 18/29 | 25/29 |
-| p50 s/file | 0.004 | 0.134 |
+| p50 s/file | 0.004 | 0.082 |
 
 Triage hours saved per 1,000 files: **56.3** (49 false alerts avoided; 2 analyst minutes per false alert; scaled linearly from 29 files).
 
-Pipeline decided_by: {'rules': 280, 'server': 12}. LLM calls: {'classify': 2} (+28 cache hits), OCR calls: 3, key rotations: 0, keys used: [0, 1].
+Pipeline decided_by: {'rules': 280, 'server': 12}. LLM calls: {'classify': 6} (+24 cache hits), OCR calls: 3, key rotations: 0, keys used: [0, 1, 2].
 
 ## Per type (pipeline)
 

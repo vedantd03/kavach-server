@@ -2,7 +2,8 @@
 
 Active only when `langsmith` is installed, LANGSMITH_TRACING=true and LANGSMITH_API_KEY is set;
 otherwise every span is a no-op. Callers decide what goes in inputs/outputs: only masked
-text may be traced (never raw identifiers, OCR images/text or API keys).
+text may be traced (never raw identifiers, OCR images/text or API keys). As a backstop,
+`scrub` re-masks every traced string before it is sent.
 """
 from __future__ import annotations
 
@@ -13,6 +14,20 @@ from typing import Any, Iterator, Optional
 
 log = logging.getLogger("detect_core.tracing")
 DEFAULT_PROJECT = "kavach-server"
+
+
+def scrub(obj: Any) -> Any:
+    """Last-line guard: re-apply the blanket mask (>=4-digit runs, emails, handles) to every
+    string bound for LangSmith, so a caller that forgets to mask cannot leak digits.
+    Dict keys and non-string scalars are kept as-is."""
+    from .masking import mask_text
+    if isinstance(obj, str):
+        return mask_text(obj)
+    if isinstance(obj, dict):
+        return {k: scrub(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [scrub(v) for v in obj]
+    return obj
 
 
 def enabled() -> bool:
@@ -37,7 +52,7 @@ class Span:
         if self._run is None:
             return
         try:
-            self._run.add_metadata(meta)
+            self._run.add_metadata(scrub(meta))
         except Exception:  # tracing must never break detection
             log.debug("langsmith add_metadata failed")
 
@@ -45,7 +60,7 @@ class Span:
         if self._run is None:
             return
         try:
-            self._run.end(outputs=outputs)
+            self._run.end(outputs=scrub(outputs))
         except Exception:
             log.debug("langsmith end failed")
 
@@ -57,7 +72,7 @@ def span(name: str, run_type: str = "chain", inputs: Optional[dict[str, Any]] = 
         yield Span()
         return
     from langsmith import trace  # lazy
-    with trace(name, run_type=run_type, inputs=inputs or {}, metadata=metadata or {}, tags=tags,  # type: ignore[arg-type]
+    with trace(name, run_type=run_type, inputs=scrub(inputs or {}), metadata=scrub(metadata or {}), tags=tags,  # type: ignore[arg-type]
                project_name=os.environ.get("LANGSMITH_PROJECT", DEFAULT_PROJECT)) as run:
         yield Span(run)
 
