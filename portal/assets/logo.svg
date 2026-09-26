@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="132" height="28" viewBox="0 0 132 28">
+  <path d="M12 2 L22 6 V13 C22 19.5 17.8 24.2 12 26 C6.2 24.2 2 19.5 2 13 V6 Z" fill="#171717"/>
+  <path d="M8 13.5 L11 16.5 L16.5 10.5" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="30" y="19.5" font-family="Geist, 'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600" fill="#171717" letter-spacing="-0.3">Kavach</text>
+</svg>

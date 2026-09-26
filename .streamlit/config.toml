@@ -1,15 +1,31 @@
 [theme]
 base = "light"
-primaryColor = "#1F2A5C"
-backgroundColor = "#F6F7FB"
-secondaryBackgroundColor = "#E9ECF5"
-textColor = "#1A1F36"
+primaryColor = "#171717"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FAFAFA"
+textColor = "#171717"
+linkColor = "#171717"
+borderColor = "#EAEAEA"
+dataframeBorderColor = "#EAEAEA"
+dataframeHeaderBackgroundColor = "#FAFAFA"
+showWidgetBorder = true
+baseRadius = "6px"
+buttonRadius = "6px"
+baseFontSize = 14
+font = "Geist:https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap"
+headingFont = "Geist:https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap"
+codeFont = "Geist Mono:https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap"
+headingFontWeights = [600, 600, 600, 500, 500, 500]
+headingFontSizes = ["1.6rem", "1.05rem", "0.95rem", "0.9rem", "0.85rem", "0.8rem"]
+metricValueFontSize = "1.6rem"
+metricValueFontWeight = 600
+chartCategoricalColors = ["#171717", "#0070F3", "#E5484D", "#F5A524", "#8F8F8F"]
 
 [server]
 headless = true
 
-[browser]
-gatherUsageStats = false
-
 [client]
 toolbarMode = "viewer"
+
+[browser]
+gatherUsageStats = false

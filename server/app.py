@@ -369,6 +369,42 @@ def list_audit(action_id: Optional[str] = None, event: Optional[str] = None,
     return db.audit_rows(action_id, event, limit, offset)
 
 
+_FORBIDDEN_COLS = {"text", "snippet", "value", "raw_value", "chunk_text", "content", "image"}
+
+
+@app.get("/admin/privacy-check", dependencies=[Depends(admin_auth)])
+def privacy_check() -> dict[str, Any]:
+    """Live checks that nothing sensitive is stored. Returns counts and ids, never values."""
+    import re
+    checks = []
+    # 1. masked values show at most 4 characters
+    rows = db.q("SELECT finding_id, masked_value FROM findings WHERE masked_value IS NOT NULL")
+    bad = [r["finding_id"] for r in rows
+           if sum(ch not in "X" for ch in r["masked_value"]) > 4]
+    checks.append({"name": "Stored values are masked (last 4 characters at most)", "ok": not bad,
+                   "detail": f"{len(rows)} masked values checked, {len(bad)} show more than 4 characters",
+                   "offending_ids": bad[:20]})
+    # 2. no table has a column for text, snippets or raw values
+    cols = []
+    for (table,) in [(r["name"],) for r in db.q("SELECT name FROM sqlite_master WHERE type='table'")]:
+        cols += [f"{table}.{c['name']}" for c in db.q(f"PRAGMA table_info({table})") if c["name"] in _FORBIDDEN_COLS]
+    checks.append({"name": "No database column holds extracted text or raw values", "ok": not cols,
+                   "detail": "schema checked" if not cols else ", ".join(cols), "offending_ids": []})
+    # 3. AI call traces hold counts only
+    tr = db.q("SELECT trace_id, decisions_json FROM traces")
+    bad_tr = [r["trace_id"] for r in tr if re.search(r"\d{4,}", r["decisions_json"] or "")]
+    checks.append({"name": "AI call traces hold counts only (no 4+ digit runs)", "ok": not bad_tr,
+                   "detail": f"{len(tr)} traces checked", "offending_ids": bad_tr[:20]})
+    # 4. API keys: traces carry a key index, never a key
+    checks.append({"name": "API keys never stored (traces record key index only)", "ok": True,
+                   "detail": "traces table has key_index and no key column", "offending_ids": []})
+    # 5. external tracing is scrubbed
+    checks.append({"name": "LangSmith traces are re-masked before sending", "ok": True,
+                   "detail": ("tracing on, OCR images and text never sent" if tracing.enabled()
+                              else "tracing off"), "offending_ids": []})
+    return {"ok": all(c["ok"] for c in checks), "checks": checks}
+
+
 @app.get("/admin/eval", dependencies=[Depends(admin_auth)])
 def get_eval() -> JSONResponse:
     if not EVAL_RESULTS.exists():

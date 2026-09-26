@@ -1,4 +1,8 @@
-"""Shared look and helpers for the Kavach Console."""
+"""Shared look and helpers for the Kavach Console.
+
+Look: monochrome, hairline borders, Geist (set in .streamlit/config.toml). Colour is reserved
+for meaning: tier, status, and nothing else.
+"""
 from __future__ import annotations
 
 import html
@@ -11,8 +15,8 @@ import streamlit as st
 from api_client import Api, ApiError
 
 TIERS = ["restricted", "confidential", "internal", "public"]
-TIER_COLOR = {"restricted": "#B3261E", "confidential": "#B86E00", "internal": "#2F6F73", "public": "#7C8799"}
-TIER_TINT = {"restricted": "#FBEAE9", "confidential": "#FCF1E0", "internal": "#E6F1F1", "public": "#EEF0F4"}
+TIER_COLOR = {"restricted": "#E5484D", "confidential": "#F5A524", "internal": "#0070F3", "public": "#A1A1A1"}
+TIER_TEXT = {"restricted": "#C9252D", "confidential": "#A35200", "internal": "#0060D1", "public": "#6F6F6F"}
 TYPE_LABEL = {
     "AADHAAR": "Aadhaar", "PAN_INDIVIDUAL": "PAN (individual)", "PAN_BUSINESS": "PAN (business)",
     "GSTIN": "GSTIN", "UPI_ID": "UPI ID", "BANK_ACCOUNT": "Bank account", "MOBILE_IN": "Mobile",
@@ -24,35 +28,32 @@ REFRESH_SEC = float(os.environ.get("PORTAL_REFRESH_SEC", "3"))
 
 _CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Mukta:wght@400;500;600;700&display=swap');
-:root { --ink:#1F2A5C; --paper:#F6F7FB; --line:#D9DDEA; --muted:#5B6479; }
-html, body, .stApp, .stMarkdown, p, li, label, input, textarea, select, button, h1, h2, h3,
-[data-testid="stMetricValue"], [data-testid="stMetricLabel"], [data-testid="stCaptionContainer"] {
-  font-family: 'Mukta', system-ui, sans-serif !important;
-}
-[data-testid="stIconMaterial"] { font-family: 'Material Symbols Rounded' !important; }
-h1, h2, h3 { color: var(--ink); letter-spacing: -0.01em; }
-h1 { font-weight: 700 !important; font-size: 2.1rem !important; margin-bottom: 0 !important; }
-h3 { font-weight: 600 !important; font-size: 1.15rem !important; }
-[data-testid="stMetricValue"] { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
-[data-testid="stMetricLabel"] p { color: var(--muted); font-size: 0.95rem; }
-[data-testid="stMetric"] { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
-.kv-sub { color: var(--muted); margin-top: -4px; font-size: 1rem; }
-.kv-brand { display:flex; align-items:baseline; gap:10px; margin: 0 0 4px 0; }
-.kv-brand .dev { font-size: 2.3rem; font-weight: 700; color: var(--ink); line-height: 1; }
-.kv-brand .lat { font-size: 1.05rem; color: var(--muted); }
-.stamp { display:inline-block; padding: 1px 9px 0; border: 1.5px solid; border-radius: 4px;
-  font-weight: 600; font-size: 0.86rem; line-height: 1.5; white-space: nowrap; }
-.stamp.big { transform: rotate(-2deg); font-size: 0.95rem; }
-table.kv { width:100%; border-collapse: collapse; background:#fff; border:1px solid var(--line); border-radius:6px; }
-table.kv th { text-align:left; color: var(--muted); font-weight:500; padding:8px 12px; border-bottom:1px solid var(--line); }
-table.kv td { padding:9px 12px; border-bottom:1px solid #EDF0F6; vertical-align: middle; }
-table.kv tr:last-child td { border-bottom: none; }
-table.kv td.num { font-variant-numeric: tabular-nums; text-align:right; }
-table.kv .path { color: var(--muted); font-size: 0.85rem; }
-table.kv td.nowrap { white-space: nowrap; }
-.dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
-.note { background:#fff; border-left: 3px solid var(--ink); padding: 10px 14px; color:#2B3350; border-radius: 0 6px 6px 0; }
+:root { --fg:#171717; --muted:#666; --faint:#8F8F8F; --line:#EAEAEA; --subtle:#FAFAFA; }
+.block-container { padding-top: 2.2rem; max-width: 1240px; }
+h1 { letter-spacing: -0.03em; }
+h2, h3 { letter-spacing: -0.01em; }
+[data-testid="stMetric"] { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; background:#fff; }
+[data-testid="stMetricLabel"] p { color: var(--muted); font-size: 13px; }
+[data-testid="stMetricValue"] { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.sub { color: var(--muted); margin: -6px 0 18px; font-size: 14px; }
+.badge { display:inline-flex; align-items:center; gap:6px; padding: 1px 8px; border:1px solid var(--line);
+  border-radius: 999px; font-size: 12.5px; color: var(--fg); background:#fff; white-space:nowrap; line-height:20px; }
+.badge i { width:7px; height:7px; border-radius:50%; display:inline-block; }
+.mono { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px; }
+.faint { color: var(--faint); }
+table.t { width:100%; border-collapse: separate; border-spacing:0; border:1px solid var(--line); border-radius:8px;
+  overflow:hidden; font-size: 13.5px; background:#fff; }
+table.t th { text-align:left; font-weight:500; color: var(--muted); background: var(--subtle); padding: 9px 12px;
+  border-bottom:1px solid var(--line); font-size: 12.5px; }
+table.t td { padding: 10px 12px; border-bottom:1px solid var(--line); vertical-align: middle; }
+table.t tr:last-child td { border-bottom: none; }
+table.t th, table.t td { border-left: none !important; border-right: none !important; border-top: none; }
+table.t td.n, table.t th.n { text-align:right; font-variant-numeric: tabular-nums; }
+table.t td.nw { white-space: nowrap; }
+.callout { border:1px solid var(--line); border-radius:8px; padding: 12px 14px; background: var(--subtle);
+  color:#333; font-size:13.5px; }
+.bar { display:flex; height:8px; border-radius:4px; overflow:hidden; background:#F2F2F2; min-width:120px; }
+.bar span { display:block; height:100%; }
 </style>
 """
 
@@ -81,12 +82,34 @@ def call(fn, *args, **kwargs):
         st.stop()
 
 
-def stamp(tier: Optional[str], big: bool = False) -> str:
+def e(s: object) -> str:
+    return html.escape(str(s))
+
+
+def badge(tier: Optional[str]) -> str:
     if not tier:
-        return '<span class="path">none</span>'
-    c, t = TIER_COLOR.get(tier, "#7C8799"), TIER_TINT.get(tier, "#EEF0F4")
-    return (f'<span class="stamp{" big" if big else ""}" style="color:{c};border-color:{c};background:{t}">'
-            f'{html.escape(tier.capitalize())}</span>')
+        return '<span class="faint">none</span>'
+    return f'<span class="badge"><i style="background:{TIER_COLOR.get(tier, "#A1A1A1")}"></i>{e(tier.capitalize())}</span>'
+
+
+def status(label: str, color: str) -> str:
+    return f'<span class="badge"><i style="background:{color}"></i>{e(label)}</span>'
+
+
+def tier_bar(counts: dict[str, int]) -> str:
+    total = sum(counts.values())
+    if not total:
+        return '<div class="bar"></div>'
+    parts = "".join(f'<span style="width:{counts.get(t, 0) / total * 100:.2f}%;background:{TIER_COLOR[t]}" '
+                    f'title="{counts.get(t, 0)} {t}"></span>' for t in TIERS if counts.get(t))
+    return f'<div class="bar">{parts}</div>'
+
+
+def table(headers: list[str], rows: list[list[str]], numeric: set[int] = frozenset()) -> str:
+    th = "".join(f'<th class="{"n" if i in numeric else ""}">{e(h)}</th>' for i, h in enumerate(headers))
+    body = "".join("<tr>" + "".join(f'<td class="{"n" if i in numeric else ""}">{c}</td>'
+                                    for i, c in enumerate(r)) + "</tr>" for r in rows)
+    return f'<table class="t"><thead><tr>{th}</tr></thead><tbody>{body}</tbody></table>'
 
 
 def split_path(path: str) -> tuple[str, str]:
@@ -95,7 +118,6 @@ def split_path(path: str) -> tuple[str, str]:
 
 
 def short_folder(path: str, keep: int = 2) -> str:
-    """Last `keep` folders of a file's directory, e.g. '.../files/Downloads'."""
     parts = [x for x in split_path(path)[1].split("/") if x]
     return ("…/" if len(parts) > keep else "") + "/".join(parts[-keep:])
 
@@ -109,14 +131,18 @@ def ago(ts: Optional[str]) -> str:
         return ts
     s = int((datetime.now(timezone.utc) - dt).total_seconds())
     if s < 60:
-        return f"{max(s, 0)} s ago"
+        return f"{max(s, 0)}s ago"
     if s < 3600:
-        return f"{s // 60} min ago"
+        return f"{s // 60}m ago"
     if s < 86400:
-        return f"{s // 3600} h ago"
+        return f"{s // 3600}h ago"
     return dt.strftime("%d %b %H:%M")
 
 
 def header(title: str, sub: str) -> None:
     st.title(title)
-    st.markdown(f'<p class="kv-sub">{html.escape(sub)}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="sub">{e(sub)}</p>', unsafe_allow_html=True)
+
+
+def html_block(markup: str) -> None:
+    st.markdown(markup, unsafe_allow_html=True)

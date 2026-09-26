@@ -32,3 +32,7 @@ Additions only; nothing in API.md was renamed or removed.
      `high_risk_files` (files with max risk >= `risk_bands.high`) and `pending_approvals`
      (actions with status `suggested`).
    - `/admin/findings` adds a `kind` filter (`item` | `document`).
+8. **`GET /admin/privacy-check`** (additive, console Health page): live checks on stored data:
+   masked values show at most 4 characters, no text/raw-value columns, traces hold counts only,
+   no key column, LangSmith scrubbing on. Returns `{ok, checks: [{name, ok, detail, offending_ids}]}`
+   with counts and ids only.

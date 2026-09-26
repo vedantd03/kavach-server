@@ -8,7 +8,7 @@ import streamlit as st
 import ui
 
 api = ui.api()
-ui.header("Findings", "Every detected item, with masked values only.")
+ui.header("Findings", "Every detected item and why it was decided. Values are masked.")
 
 devices = ui.call(api.devices)
 summary = ui.call(api.summary)
@@ -39,7 +39,7 @@ files = ui.call(api.findings, device_id=None if device == "All devices" else dev
 judged = [f for f in files if f.llm_suggested_tier]
 differ = [f for f in judged if f.llm_suggested_tier != f.sensitivity_tier]
 st.markdown(
-    f"<div class='note'>The final tier is computed by code from policy "
+    f"<div class='callout'>The final tier is computed by code from policy "
     f"<b>{files[0].policy_version if files else '-'}</b>. The AI's suggested tier is stored alongside and never "
     f"overrides it. On <b>{len(differ)}</b> of <b>{len(judged)}</b> files the AI suggested a different tier.</div>",
     unsafe_allow_html=True)
@@ -80,11 +80,11 @@ if kind == "document":
 st.caption(f"{len(df)} {'files' if kind == 'document' else 'items'}, highest risk first. Select a row for details.")
 def _tier_css(v: str) -> str:
     t = str(v).lower()
-    return f"color: {ui.TIER_COLOR[t]}; font-weight: 600" if t in ui.TIER_COLOR else ""
+    return f"color: {ui.TIER_TEXT[t]}; font-weight: 500" if t in ui.TIER_TEXT else ""
 
 
 styled = (df.style.map(_tier_css, subset=["Final tier (code)", "AI suggested"])
-          .map(lambda v: "color: #B3261E; font-weight: 600" if v == "differs" else "", subset=["Match"]))
+          .map(lambda v: "color: #C9252D; font-weight: 500" if v == "differs" else "", subset=["Match"]))
 event = st.dataframe(
     styled, hide_index=True, width="stretch", height=520, on_select="rerun", selection_mode="single-row",
     column_config={
@@ -98,7 +98,7 @@ sel = event.selection.rows if event and event.selection else []
 if sel:
     f = findings[sel[0]]
     with st.container(border=True):
-        st.markdown(f"{ui.stamp(f.sensitivity_tier, big=True)} &nbsp; **{ui.TYPE_LABEL.get(f.pii_type or '', f.doc_type)}** "
+        st.markdown(f"{ui.badge(f.sensitivity_tier)} &nbsp; **{ui.TYPE_LABEL.get(f.pii_type or '', f.doc_type)}** "
                     f"{f.masked_value or ''}", unsafe_allow_html=True)
         a, b = st.columns(2)
         a.markdown(f"**Why this tier (code)**  \n{f.tier_reason}")

@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 import httpx
 
-from detect_core.contracts import DeviceView, Finding, ScanView
+from detect_core.contracts import CreateScanRequest, CreateScanResponse, DeviceView, Finding, ScanView
 
 
 class ApiError(RuntimeError):
@@ -31,11 +31,14 @@ class Api:
 
     def _get(self, path: str, **params: Any) -> Any:
         clean = {k: v for k, v in params.items() if v not in (None, "", [])}
+        return self._send("GET", path, params=clean)
+
+    def _send(self, method: str, path: str, **kw: Any) -> Any:
         try:
-            r = self._http.get(path, params=clean)
+            r = self._http.request(method, path, **kw)
         except httpx.HTTPError as exc:
             raise ApiError(0, "SERVER_UNREACHABLE", f"{self.base_url} did not respond ({type(exc).__name__})")
-        if r.status_code != 200:
+        if r.status_code not in (200, 201):
             detail = {}
             try:
                 detail = r.json().get("detail") or {}
@@ -77,3 +80,10 @@ class Api:
 
     def eval(self) -> dict[str, Any]:
         return self._get("/admin/eval")
+
+    def privacy_check(self) -> dict[str, Any]:
+        return self._get("/admin/privacy-check")
+
+    def start_scan(self, req: CreateScanRequest) -> CreateScanResponse:
+        return CreateScanResponse.model_validate(
+            self._send("POST", "/admin/scans", json=req.model_dump(exclude_none=True)))
