@@ -1,0 +1,6 @@
+ACME CORP - SALARY SLIP - SEPTEMBER 2026
+Employee: Sanya Sandal   Emp code: E5155
+PAN: AVKPS2614F
+Salary credited to A/c 79853293042621 (IFSC UTIB0736551)
+Basic 45,000 | HRA 18,000 | Special 12,500 | PF -5,400 | TDS -6,200
+Net pay: 63,900
