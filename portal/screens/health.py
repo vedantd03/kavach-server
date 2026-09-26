@@ -6,7 +6,7 @@ import streamlit as st
 import ui
 
 api = ui.api()
-ui.header("Health", "Are laptops reporting, is the AI responding, and is anything leaking?")
+ui.header("Health")
 
 devices = ui.call(api.devices)
 stats = ui.call(api.pipeline_stats)

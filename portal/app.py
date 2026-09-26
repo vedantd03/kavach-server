@@ -49,7 +49,7 @@ def _signed_in() -> bool:
 if not _signed_in():
     st.stop()
 
-P = HERE / "pages"
+P = HERE / "screens"  # not "pages/": Streamlit would auto-discover that folder and bypass st.navigation
 nav = st.navigation([
     st.Page(str(P / "overview.py"), title="Overview", default=True),
     st.Page(str(P / "findings.py"), title="Findings"),

@@ -25,7 +25,7 @@ def base(chart: alt.Chart) -> alt.Chart:
             .configure_text(font="Geist"))
 
 
-ui.header("Accuracy", "How the pipeline compares with rules alone on a labelled test set.")
+ui.header("Accuracy")
 
 try:
     r = ui.api().eval()
@@ -56,20 +56,10 @@ rates = [("Precision", bo["precision"], po["precision"]),
          ("F1", bo["f1"], po["f1"]),
          ("Look-alikes ignored", b["hard_negatives"]["rejection_rate"], hn["rejection_rate"]),
          ("File tier exactly right", b["tier"]["exact"] / b["tier"]["files"], p["tier"]["exact"] / p["tier"]["files"])]
-df = pd.DataFrame([{"measure": m, "mode": mode, "value": v, "o": i}
-                   for i, (m, vb, vp) in enumerate(rates) for mode, v in ((BASELINE, vb), (PIPELINE, vp))])
-enc = dict(
-    y=alt.Y("measure:N", sort=[m for m, _, _ in rates], title=None, axis=alt.Axis(ticks=False, domain=False, labelPadding=8)),
-    yOffset=alt.YOffset("mode:N", sort=[BASELINE, PIPELINE]),
-    x=alt.X("value:Q", title=None, scale=alt.Scale(domain=[0, 1.12]),
-            axis=alt.Axis(format="%", values=[0, 0.25, 0.5, 0.75, 1], grid=True)))
-bars = alt.Chart(df).mark_bar(cornerRadiusEnd=4).encode(
-    **enc, color=alt.Color("mode:N", scale=alt.Scale(domain=[BASELINE, PIPELINE], range=[ORANGE, BLUE])),
-    tooltip=[alt.Tooltip("measure:N", title="Measure"), alt.Tooltip("mode:N", title="Mode"),
-             alt.Tooltip("value:Q", title="Value", format=".1%")])
-labels = alt.Chart(df).mark_text(align="left", dx=5, fontSize=11, color=MUTED).encode(
-    **enc, text=alt.Text("value:Q", format=".0%"))
-st.altair_chart(base((bars + labels).properties(height=5 * 52)), width="stretch")
+rows = [[ui.e(m), f"{vb:.1%}", f"<b>{vp:.1%}</b>"] for m, vb, vp in rates]
+rows.append(["False alarms", str(bo["fp"]), f"<b>{po['fp']}</b>"])
+ui.html_block(ui.table(["Measure", BASELINE, PIPELINE], rows, {1, 2}))
+st.write("")
 
 # --------------------------------------------------------------------------- mistakes
 m1, m2 = st.columns(2, gap="large")

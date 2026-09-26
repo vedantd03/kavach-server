@@ -57,7 +57,7 @@ table.t td.nw { white-space: nowrap; }
 a.lnk { color: var(--fg) !important; text-decoration: none; border-bottom: 1px solid #D4D4D4; }
 a.lnk:hover { border-bottom-color: var(--fg); }
 a.lnk:focus-visible { outline: 2px solid #0070F3; outline-offset: 2px; border-radius: 2px; }
-.crumb { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.crumb { font-size: 13px; color: var(--muted); margin: 22px 0 -6px; line-height: 1.6; }
 </style>
 """
 
@@ -143,9 +143,10 @@ def ago(ts: Optional[str]) -> str:
     return dt.strftime("%d %b %H:%M")
 
 
-def header(title: str, sub: str) -> None:
+def header(title: str, sub: str = "") -> None:
     st.title(title)
-    st.markdown(f'<p class="sub">{e(sub)}</p>', unsafe_allow_html=True)
+    if sub:
+        st.markdown(f'<p class="sub">{e(sub)}</p>', unsafe_allow_html=True)
 
 
 def html_block(markup: str) -> None:
