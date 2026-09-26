@@ -1,11 +1,29 @@
-"""Accuracy: false alarms avoided versus rules alone, triage hours saved, assumptions stated."""
+"""Accuracy: the pipeline against rules alone, as charts."""
 from __future__ import annotations
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
 import ui
 from api_client import ApiError
+
+# Reference categorical slots 1-3 (validated: lightness, chroma, CVD, normal-vision all pass).
+BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"
+INK, MUTED, GRID = "#171717", "#666666", "#EAEAEA"
+PIPELINE, BASELINE = "Rules + context + AI", "Rules alone"
+
+
+def base(chart: alt.Chart) -> alt.Chart:
+    return (chart.configure_view(stroke=None)
+            .configure_axis(labelColor=MUTED, titleColor=MUTED, gridColor=GRID, domainColor=GRID, tickColor=GRID,
+                            labelFont="Geist", titleFont="Geist", labelFontSize=12, titleFontSize=12,
+                            titleFontWeight="normal", labelLimit=240)
+            .configure_scale(bandPaddingInner=0.35)
+            .configure_legend(labelColor=INK, labelFont="Geist", labelFontSize=12, orient="top", title=None,
+                              symbolType="square", symbolSize=90)
+            .configure_text(font="Geist"))
+
 
 ui.header("Accuracy", "How the pipeline compares with rules alone on a labelled test set.")
 
@@ -19,64 +37,123 @@ except ApiError as e:
     st.error(f"The server returned {e.status} {e.code}: {e.message}")
     st.stop()
 
-base, pipe, imp, corpus = r["modes"]["rules_only"], r["modes"]["server"], r["impact"], r["corpus"]
-bo, po = base["overall"], pipe["overall"]
-
-st.markdown(
-    f"### On {corpus['files']} test files, rules alone raised {bo['fp']} false alarms. "
-    f"The pipeline raised {po['fp']}.")
+b, p, imp, corpus = r["modes"]["rules_only"], r["modes"]["server"], r["impact"], r["corpus"]
+bo, po = b["overall"], p["overall"]
+hn = p["hard_negatives"]
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("False alarms avoided", imp["false_positives_avoided"])
-c2.metric("Hours saved per 1,000 files", f"{imp['triage_hours_saved_per_1000_files']:g}")
+c2.metric("Hours saved per 1,000 files", f"{imp['triage_hours_saved_per_1000_files']:g}",
+          help=f"At {r['minutes_per_alert']:g} analyst minutes per false alarm.")
 c3.metric("Precision", f"{po['precision']:.1%}", delta=f"{(po['precision'] - bo['precision']) * 100:+.1f} pts vs rules")
-c4.metric("Look-alikes ignored",
-          f"{pipe['hard_negatives']['total'] - pipe['hard_negatives']['flagged']} of {pipe['hard_negatives']['total']}",
-          help="Invoice, order, UTR and tracking numbers that pass the same checksums as Aadhaar or look like mobiles.")
+c4.metric("Look-alikes ignored", f"{hn['total'] - hn['flagged']} of {hn['total']}",
+          help="Invoice, order, UTR and tracking numbers that pass the same checksums as real identifiers.")
 
-left, right = st.columns([1, 1], gap="large")
+# --------------------------------------------------------------------------- quality rates
+st.subheader("Rules alone versus the full pipeline")
+rates = [("Precision", bo["precision"], po["precision"]),
+         ("Recall", bo["recall"], po["recall"]),
+         ("F1", bo["f1"], po["f1"]),
+         ("Look-alikes ignored", b["hard_negatives"]["rejection_rate"], hn["rejection_rate"]),
+         ("File tier exactly right", b["tier"]["exact"] / b["tier"]["files"], p["tier"]["exact"] / p["tier"]["files"])]
+df = pd.DataFrame([{"measure": m, "mode": mode, "value": v, "o": i}
+                   for i, (m, vb, vp) in enumerate(rates) for mode, v in ((BASELINE, vb), (PIPELINE, vp))])
+enc = dict(
+    y=alt.Y("measure:N", sort=[m for m, _, _ in rates], title=None, axis=alt.Axis(ticks=False, domain=False, labelPadding=8)),
+    yOffset=alt.YOffset("mode:N", sort=[BASELINE, PIPELINE]),
+    x=alt.X("value:Q", title=None, scale=alt.Scale(domain=[0, 1.12]),
+            axis=alt.Axis(format="%", values=[0, 0.25, 0.5, 0.75, 1], grid=True)))
+bars = alt.Chart(df).mark_bar(cornerRadiusEnd=4).encode(
+    **enc, color=alt.Color("mode:N", scale=alt.Scale(domain=[BASELINE, PIPELINE], range=[ORANGE, BLUE])),
+    tooltip=[alt.Tooltip("measure:N", title="Measure"), alt.Tooltip("mode:N", title="Mode"),
+             alt.Tooltip("value:Q", title="Value", format=".1%")])
+labels = alt.Chart(df).mark_text(align="left", dx=5, fontSize=11, color=MUTED).encode(
+    **enc, text=alt.Text("value:Q", format=".0%"))
+st.altair_chart(base((bars + labels).properties(height=5 * 52)), width="stretch")
+
+# --------------------------------------------------------------------------- mistakes
+m1, m2 = st.columns(2, gap="large")
+with m1:
+    st.subheader("False alarms")
+    fa = pd.DataFrame([{"mode": BASELINE, "n": bo["fp"]}, {"mode": PIPELINE, "n": po["fp"]}])
+    ch = alt.Chart(fa).encode(
+        y=alt.Y("mode:N", sort=[BASELINE, PIPELINE], title=None, axis=alt.Axis(ticks=False, domain=False, labelPadding=8)),
+        x=alt.X("n:Q", title="Items wrongly flagged", axis=alt.Axis(tickMinStep=1)))
+    st.altair_chart(base((ch.mark_bar(cornerRadiusEnd=4).encode(
+        color=alt.Color("mode:N", legend=None, scale=alt.Scale(domain=[BASELINE, PIPELINE], range=[ORANGE, BLUE])),
+        tooltip=[alt.Tooltip("mode:N", title="Mode"), alt.Tooltip("n:Q", title="False alarms")])
+        + ch.mark_text(align="left", dx=5, fontSize=12, color=INK).encode(text="n:Q")).properties(height=110)),
+        width="stretch")
+with m2:
+    st.subheader("Files given too low a tier")
+    ul = pd.DataFrame([{"mode": BASELINE, "v": b["tier"]["under_labelling_rate"], "n": b["tier"]["under_labelled"]},
+                       {"mode": PIPELINE, "v": p["tier"]["under_labelling_rate"], "n": p["tier"]["under_labelled"]}])
+    ch = alt.Chart(ul).encode(
+        y=alt.Y("mode:N", sort=[BASELINE, PIPELINE], title=None, axis=alt.Axis(ticks=False, domain=False, labelPadding=8)),
+        x=alt.X("v:Q", title=f"Share of {p['tier']['files']} files", axis=alt.Axis(format="%"),
+                scale=alt.Scale(domainMin=0, nice=True)))
+    st.altair_chart(base((ch.mark_bar(cornerRadiusEnd=4).encode(
+        color=alt.Color("mode:N", legend=None, scale=alt.Scale(domain=[BASELINE, PIPELINE], range=[ORANGE, BLUE])),
+        tooltip=[alt.Tooltip("mode:N", title="Mode"), alt.Tooltip("n:Q", title="Files"),
+                 alt.Tooltip("v:Q", title="Share", format=".1%")])
+        + ch.mark_text(align="left", dx=5, fontSize=12, color=INK).encode(
+            text=alt.Text("v:Q", format=".1%"))).properties(height=110)), width="stretch")
+
+# --------------------------------------------------------------------------- per type
+st.subheader("By identifier type")
+rows = []
+for t, m in p["per_type"].items():
+    label = ui.TYPE_LABEL.get(t, t)
+    for part, n, o in (("Found", m["tp"], 0), ("False alarms", m["fp"], 1), ("Missed", m["fn"], 2)):
+        if n:
+            rows.append({"type": label, "part": part, "n": n, "o": o, "total": m["tp"] + m["fn"]})
+pt = pd.DataFrame(rows)
+st.altair_chart(base(alt.Chart(pt).mark_bar(stroke="#FFFFFF", strokeWidth=2).encode(
+    y=alt.Y("type:N", sort=alt.EncodingSortField("total", order="descending"), title=None,
+            axis=alt.Axis(ticks=False, domain=False, labelPadding=8)),
+    x=alt.X("n:Q", title="Items", stack="zero"),
+    order=alt.Order("o:Q"),
+    color=alt.Color("part:N", scale=alt.Scale(domain=["Found", "False alarms", "Missed"], range=[BLUE, ORANGE, AQUA])),
+    tooltip=[alt.Tooltip("type:N", title="Type"), alt.Tooltip("part:N", title=" "), alt.Tooltip("n:Q", title="Items")],
+).properties(height=max(180, 34 * pt["type"].nunique()))), width="stretch")
+
+# --------------------------------------------------------------------------- tiers + decisions
+left, right = st.columns([3, 2], gap="large")
 with left:
-    st.subheader("Rules alone versus the full pipeline")
-    cmp = pd.DataFrame([
-        ("Precision", f"{bo['precision']:.3f}", f"{po['precision']:.3f}"),
-        ("Recall", f"{bo['recall']:.3f}", f"{po['recall']:.3f}"),
-        ("F1", f"{bo['f1']:.3f}", f"{po['f1']:.3f}"),
-        ("False alarms", bo["fp"], po["fp"]),
-        ("Look-alikes ignored", f"{base['hard_negatives']['rejection_rate']:.0%}", f"{pipe['hard_negatives']['rejection_rate']:.0%}"),
-        ("Files under-labelled", f"{base['tier']['under_labelling_rate']:.1%}", f"{pipe['tier']['under_labelling_rate']:.1%}"),
-        ("File tier exactly right", f"{base['tier']['exact']} of {base['tier']['files']}", f"{pipe['tier']['exact']} of {pipe['tier']['files']}"),
-        ("Median seconds per file", base["p50_seconds_per_file"], pipe["p50_seconds_per_file"]),
-    ], columns=["Measure", "Rules alone", "Rules + context + AI"]).astype(str)
-    st.dataframe(cmp, hide_index=True, width="stretch")
-
-    st.subheader("By identifier type (pipeline)")
-    pt = pd.DataFrame([{"Type": ui.TYPE_LABEL.get(t, t), "Precision": m["precision"], "Recall": m["recall"],
-                        "F1": m["f1"], "Found": m["tp"], "False alarms": m["fp"], "Missed": m["fn"]}
-                       for t, m in pipe["per_type"].items()])
-    st.dataframe(pt, hide_index=True, width="stretch",
-                 column_config={k: st.column_config.NumberColumn(format="%.3f") for k in ("Precision", "Recall", "F1")})
-
-with right:
     st.subheader("File tiers: expected versus given")
-    conf = pipe["tier"]["confusion"]
-    mat = pd.DataFrame([[conf.get(e, {}).get(g, 0) for g in ui.TIERS] for e in ui.TIERS],
-                       index=[t.capitalize() for t in ui.TIERS], columns=[t.capitalize() for t in ui.TIERS])
-    st.dataframe(mat, width="stretch")
-    st.caption("Rows are the tier a reviewer expects; columns are the tier Kavach gave. "  # noqa
-               "Anything left of the diagonal is under-labelled, the costly mistake.")
-
+    conf = p["tier"]["confusion"]
+    cm = pd.DataFrame([{"expected": e.capitalize(), "given": g.capitalize(), "n": conf.get(e, {}).get(g, 0),
+                        "ei": i, "gi": j}
+                       for i, e in enumerate(ui.TIERS) for j, g in enumerate(ui.TIERS)])
+    tiers_c = [t.capitalize() for t in ui.TIERS]
+    grid = alt.Chart(cm).encode(
+        x=alt.X("given:N", sort=tiers_c, title="Kavach gave", axis=alt.Axis(orient="top", ticks=False, domain=False, labelAngle=0)),
+        y=alt.Y("expected:N", sort=tiers_c, title="Expected", axis=alt.Axis(ticks=False, domain=False)))
+    heat = grid.mark_rect(stroke="#FFFFFF", strokeWidth=2, cornerRadius=4).encode(
+        color=alt.Color("n:Q", legend=None, scale=alt.Scale(domain=[0, max(1, cm["n"].max())],
+                                                            range=["#F5F5F4", "#9ec5f4", "#2a78d6", "#184f95"])),
+        tooltip=[alt.Tooltip("expected:N", title="Expected"), alt.Tooltip("given:N", title="Given"),
+                 alt.Tooltip("n:Q", title="Files")])
+    nums = grid.mark_text(fontSize=13).encode(
+        text=alt.Text("n:Q"),
+        color=alt.condition(alt.datum.n >= max(1, cm["n"].max()) * 0.5, alt.value("#FFFFFF"), alt.value(INK)))
+    st.altair_chart(base((heat + nums).properties(height=230)), width="stretch")
+with right:
     st.subheader("Where decisions came from")
-    db = pipe.get("decided_by", {})
-    total = sum(db.values()) or 1
-    source = {"rules": "Rules and checksums", "server": "AI on the server", "local_model": "AI on the laptop"}
-    st.markdown("  \n".join(f"{source.get(k, k)}: **{v}** ({v / total:.0%})" for k, v in db.items()))
-
-    st.subheader("Assumptions")
-    st.markdown(
-        f"- Each false alarm costs an analyst **{r['minutes_per_alert']:g} minutes** to triage.\n"
-        f"- Hours saved are scaled linearly from {corpus['files']} files to 1,000.\n"
-        f"- The test set is synthetic: {corpus['labels']} labelled items ({corpus['sensitive']} sensitive, "
-        f"{corpus['hard_negatives']} look-alikes), with fake but checksum-valid identifiers.\n"
-        f"- `{r['model']}` stands in for the company's own LLM and OCR in a real deployment.\n"
-        f"- Tiers come from an illustrative policy, version {r['policy_version']}. This is not legal advice.\n"
-        f"- Evaluated {r['generated_at'].replace('T', ' ').rstrip('Z')} UTC.")
+    dec = p.get("decided_by", {})
+    names = {"rules": "Rules and checksums", "server": "AI on the server", "local_model": "AI on the laptop"}
+    total = sum(dec.values()) or 1
+    dd = pd.DataFrame([{"source": names.get(k, k), "n": v, "share": v / total, "o": i}
+                       for i, (k, v) in enumerate(sorted(dec.items(), key=lambda kv: -kv[1])) if v])
+    colors = {"Rules and checksums": BLUE, "AI on the server": AQUA, "AI on the laptop": ORANGE}
+    ch = alt.Chart(dd).encode(
+        y=alt.Y("source:N", sort=list(dd["source"]), title=None, axis=alt.Axis(ticks=False, domain=False, labelPadding=8)),
+        x=alt.X("n:Q", title="Items decided", scale=alt.Scale(domain=[0, dd["n"].max() * 1.35])))
+    st.altair_chart(base((ch.mark_bar(cornerRadiusEnd=4).encode(
+        color=alt.Color("source:N", legend=None, scale=alt.Scale(domain=list(colors), range=list(colors.values()))),
+        tooltip=[alt.Tooltip("source:N", title="Source"), alt.Tooltip("n:Q", title="Items"),
+                 alt.Tooltip("share:Q", title="Share", format=".0%")])
+        + ch.mark_text(align="left", dx=6, fontSize=12, color=INK).encode(
+            text=alt.Text("label:N")).transform_calculate(
+            label="datum.n + ' (' + format(datum.share, '.0%') + ')'")).properties(height=40 + 34 * len(dd))),
+        width="stretch")
