@@ -1,0 +1,88 @@
+# Context cues per item type: English, Hindi (Devanagari) and Hinglish.
+# Matched case-insensitively within +-60 chars of a candidate, and against column headers.
+# `_numeric_negative` cues mark look-alike numbers (invoice/order/UTR ...) and apply to
+# every numeric type listed under `numeric_types`.
+
+numeric_types: [AADHAAR, BANK_ACCOUNT, MOBILE_IN]
+
+_numeric_negative: &numeric_negative
+  - invoice
+  - inv no
+  - inv. no
+  - inv #
+  - order id
+  - order no
+  - order #
+  - utr
+  - txn
+  - transaction id
+  - reference
+  - ref no
+  - ref. no
+  - bill no
+  - awb
+  - tracking
+  - po no
+  - po number
+  - purchase order
+  - challan
+  - receipt no
+  - serial no
+  - sku
+  - ticket id
+  - batch no
+  - चालान
+  - बिल
+
+AADHAAR:
+  positive: [aadhaar, aadhar, adhar, aadhaar no, aadhar no, aadhaar number, uid, uidai,
+             आधार, आधार संख्या, mera aadhar, mera aadhaar, aadhar card, aadhaar card,
+             enrolment, vid]
+  negative: *numeric_negative
+
+PAN:
+  positive: [pan, pan card, pan no, pan number, permanent account number, पैन, pan bhej,
+             pan de, income tax]
+  negative: [part no, model no]
+
+BANK_ACCOUNT:
+  positive: [a/c, a/c no, acct, account no, account number, bank account, khata,
+             khata no, खाता, ifsc, beneficiary, saving account, savings a/c, current a/c]
+  negative: *numeric_negative
+
+IFSC:
+  positive: [ifsc, ifsc code, branch]
+  negative: []
+
+MOBILE_IN:
+  positive: [mobile, mob, phone, ph, cell, contact, whatsapp, मोबाइल, फ़ोन, फोन,
+             number hai, call karo, mera number]
+  negative: [fax, toll free, landline, helpline, customer care, support line,
+             office, board line]
+
+EMAIL:
+  positive: [email, e-mail, mail, ईमेल]
+  negative: [noreply, no-reply, support@, info@, sales@, helpdesk@]
+
+UPI_ID:
+  positive: [upi, vpa, gpay, phonepe, paytm, bhim, pay to, upi id, upi bhej]
+  negative: []
+
+GSTIN:
+  positive: [gstin, gst no, gst number, gst reg, जीएसटी]
+  negative: []
+
+SECRET:
+  positive: [key, secret, token, password, passwd, pwd, credential, api_key, apikey]
+  negative: [example, dummy, placeholder, changeme, your_key_here]
+
+# Header cues: a column header containing any of these points at the type.
+headers:
+  AADHAAR: [aadhaar, aadhar, uid, आधार]
+  PAN: [pan]
+  BANK_ACCOUNT: [account, a/c, acct, khata]
+  MOBILE_IN: [mobile, phone, contact, cell, whatsapp]
+  EMAIL: [email, e-mail, mail]
+  UPI_ID: [upi, vpa]
+  GSTIN: [gstin, gst]
+  negative: [invoice, order, utr, txn, transaction, ref, bill, awb, tracking, po, sku, serial, ticket]

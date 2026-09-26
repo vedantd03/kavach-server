@@ -1,0 +1,30 @@
+version: "2026-09-26.1"
+tiers: [restricted, confidential, internal, public]   # highest first
+thresholds: {confirm: 0.85, drop: 0.20}
+items:
+  AADHAAR:        {category: personal, tier: confidential, bulk_threshold: 10, bulk_tier: restricted, weight: 1.0}
+  BANK_ACCOUNT:   {category: personal, tier: confidential, bulk_threshold: 10, bulk_tier: restricted, weight: 0.9}
+  PAN_INDIVIDUAL: {category: personal, tier: confidential, weight: 0.8}
+  PAN_BUSINESS:   {category: business, tier: internal,     weight: 0.2}
+  GSTIN:          {category: business, tier: internal,     weight: 0.2}
+  UPI_ID:         {category: personal, tier: confidential, weight: 0.6}
+  MOBILE_IN:      {category: personal, tier: internal, bulk_threshold: 10, bulk_tier: confidential, weight: 0.4}
+  EMAIL:          {category: personal, tier: internal, bulk_threshold: 10, bulk_tier: confidential, weight: 0.3}
+  SECRET:         {category: secret,   tier: restricted,   weight: 1.0}
+documents:        # defined now, not evaluated today
+  kyc_document:   {category: personal, tier: restricted}
+  purchase_order: {category: business, tier: confidential}
+  payroll:        {category: business, tier: restricted}
+  board_minutes:  {category: business, tier: restricted}
+markings_raise_to:
+  "STRICTLY CONFIDENTIAL": restricted
+  "CONFIDENTIAL": confidential
+exposure: {synced: 1.0, shared: 1.0, downloads: 0.8, desktop: 0.8, documents: 0.6, other: 0.6}
+state: {unmasked: 1.0, masked_in_source: 0.2}
+volume: {bulk_multiplier: 1.5}
+risk_bands: {high: 70, medium: 40}
+actions:
+  restricted:   [quarantine, encrypt]
+  confidential: [masked_copy]
+  internal:     []
+  public:       []
